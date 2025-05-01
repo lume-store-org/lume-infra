@@ -1,0 +1,171 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "5000:5000"  # SOMENTE o API Gateway deve ter a porta exposta externamente
+    environment:
+      - ITENS_SERVICE_URL=http://service-itens:5001
+      - PEDIDOS_SERVICE_URL=http://service-pedidos:5002
+      - USUARIOS_SERVICE_URL=http://service-usuarios:5003
+    depends_on:
+      - service-itens
+      - service-pedidos
+      - service-usuarios
+    networks:
+      - ecommerce-network
+    restart: always
+
+  # Serviço de Itens
+  service-itens:
+    build: ./service-itens
+    container_name: service-itens
+    # Removida a exposição da porta - agora só acessível dentro da rede Docker
+    environment:
+      - DB_HOST=mysql-itens
+      - DB_NAME=itens_db
+      - DB_USER=root
+      - DB_PASSWORD=root
+    depends_on:
+      mysql-itens:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    restart: always
+    # Usando Gunicorn com um pequeno delay para o MySQL inicializar
+    command: >
+      sh -c "sleep 5 && gunicorn --bind 0.0.0.0:5001 app:app"
+
+  # Banco de dados para o serviço de itens
+  mysql-itens:
+    image: mysql:8.0
+    container_name: mysql-itens
+    ports:
+      - "3307:3306"  # Mantendo porta exposta para acesso via DBeaver
+    environment:
+      - MYSQL_DATABASE=itens_db
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    volumes:
+      - ./service-itens/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql-itens-data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+    networks:
+      - ecommerce-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # Serviço de Pedidos
+  service-pedidos:
+    build: ./service-pedidos
+    container_name: service-pedidos
+    # Removida a exposição da porta - agora só acessível dentro da rede Docker
+    environment:
+      - DB_HOST=mysql-pedidos
+      - DB_NAME=pedidos_db
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - ITENS_SERVICE_URL=http://service-itens:5001
+    depends_on:
+      mysql-pedidos:
+        condition: service_healthy
+      service-itens:
+        condition: service_started
+    networks:
+      - ecommerce-network
+    restart: always
+
+  # Banco de dados para o serviço de pedidos
+  mysql-pedidos:
+    image: mysql:8.0
+    container_name: mysql-pedidos
+    ports:
+      - "3308:3306"  # Mantendo porta exposta para acesso via DBeaver
+    environment:
+      - MYSQL_DATABASE=pedidos_db
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    volumes:
+      - ./service-pedidos/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql-pedidos-data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+    networks:
+      - ecommerce-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Serviço de Usuários
+  service-usuarios:
+    build: ./service-usuarios
+    container_name: service-usuarios
+    # Removida a exposição da porta - agora só acessível dentro da rede Docker
+    environment:
+      - DB_HOST=mysql-usuarios
+      - DB_NAME=usuarios_db
+      - DB_USER=root
+      - DB_PASSWORD=root
+    depends_on:
+      mysql-usuarios:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    restart: always
+
+  # Banco de dados para o serviço de usuários
+  mysql-usuarios:
+    image: mysql:8.0
+    container_name: mysql-usuarios
+    ports:
+      - "3309:3306"  # Mantendo porta exposta para acesso via DBeaver
+    environment:
+      - MYSQL_DATABASE=usuarios_db
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    volumes:
+      - ./service-usuarios/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql-usuarios-data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+    networks:
+      - ecommerce-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  ecommerce-network:
+    driver: bridge
+
+volumes:
+  mysql-itens-data:
+  mysql-pedidos-data:
+  mysql-usuarios-data:
