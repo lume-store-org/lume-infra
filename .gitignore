@@ -1,20 +1,9 @@
-# Ambiente
+# Environment (passwords)
 .env
 .env.*
 !.env.example
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
-
-# Node / Next.js
-node_modules/
-.next/
-out/
-
-# Sistema / editores
+# System / editors
 .DS_Store
 .vscode/
 .idea/
