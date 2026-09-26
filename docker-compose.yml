@@ -1,4 +1,4 @@
-# Credenciais vêm do .env (copie o .env.example)
+# Credentials come from .env (copy .env.example)
 
 x-mysql: &mysql
   image: mysql:8.0
@@ -7,130 +7,130 @@ x-mysql: &mysql
     - --character-set-server=utf8mb4
     - --collation-server=utf8mb4_unicode_ci
   environment: &mysql-env
-    MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD no .env}
-    MYSQL_USER: ${DB_USER:?defina DB_USER no .env}
-    MYSQL_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+    MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    MYSQL_USER: ${DB_USER:?set DB_USER in .env}
+    MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
   healthcheck:
     test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
     interval: 5s
     timeout: 5s
     retries: 20
     start_period: 20s
-  networks: [ecommerce]
+  networks: [lume]
 
 x-service-env: &service-env
   DB_USER: ${DB_USER}
   DB_PASSWORD: ${DB_PASSWORD}
 
 services:
-  # Loja (Next.js); fala só com o API Gateway, pelo navegador
-  frontend:
+  # Store front (Next.js); the browser talks only to the API Gateway
+  lume-front:
     build:
       context: ./front
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
-    container_name: frontend
+    container_name: lume-front
     restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
-      - api-gateway
-    networks: [ecommerce]
+      - lume-gateway
+    networks: [lume]
 
-  # Único ponto de entrada da API
-  api-gateway:
+  # Single entry point of the API
+  lume-gateway:
     build: ./gateway
-    container_name: api-gateway
+    container_name: lume-gateway
     restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
-      ITENS_SERVICE_URL: http://service-itens:5001
-      PEDIDOS_SERVICE_URL: http://service-pedidos:5002
-      USUARIOS_SERVICE_URL: http://service-usuarios:5003
+      CATALOG_SERVICE_URL: http://lume-catalog:5001
+      ORDERS_SERVICE_URL: http://lume-orders:5002
+      USERS_SERVICE_URL: http://lume-users:5003
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
     depends_on:
-      service-itens: { condition: service_healthy }
-      service-pedidos: { condition: service_healthy }
-      service-usuarios: { condition: service_healthy }
-    networks: [ecommerce]
+      lume-catalog: { condition: service_healthy }
+      lume-orders: { condition: service_healthy }
+      lume-users: { condition: service_healthy }
+    networks: [lume]
 
-  service-itens:
+  lume-catalog:
     build: ./catalog
-    container_name: service-itens
+    container_name: lume-catalog
     restart: unless-stopped
     environment:
       <<: *service-env
-      DB_HOST: mysql-itens
-      DB_NAME: itens_db
+      DB_HOST: mysql-catalog
+      DB_NAME: catalog_db
     depends_on:
-      mysql-itens: { condition: service_healthy }
-    networks: [ecommerce]
+      mysql-catalog: { condition: service_healthy }
+    networks: [lume]
 
-  service-pedidos:
+  lume-orders:
     build: ./orders
-    container_name: service-pedidos
+    container_name: lume-orders
     restart: unless-stopped
     environment:
       <<: *service-env
-      DB_HOST: mysql-pedidos
-      DB_NAME: pedidos_db
-      ITENS_SERVICE_URL: http://service-itens:5001
+      DB_HOST: mysql-orders
+      DB_NAME: orders_db
+      CATALOG_SERVICE_URL: http://lume-catalog:5001
     depends_on:
-      mysql-pedidos: { condition: service_healthy }
-      service-itens: { condition: service_healthy }
-    networks: [ecommerce]
+      mysql-orders: { condition: service_healthy }
+      lume-catalog: { condition: service_healthy }
+    networks: [lume]
 
-  service-usuarios:
+  lume-users:
     build: ./users
-    container_name: service-usuarios
+    container_name: lume-users
     restart: unless-stopped
     environment:
       <<: *service-env
-      DB_HOST: mysql-usuarios
-      DB_NAME: usuarios_db
+      DB_HOST: mysql-users
+      DB_NAME: users_db
     depends_on:
-      mysql-usuarios: { condition: service_healthy }
-    networks: [ecommerce]
+      mysql-users: { condition: service_healthy }
+    networks: [lume]
 
-  # Um banco por serviço; portas só em localhost, para acesso por cliente SQL
-  mysql-itens:
+  # One database per service; ports bound to localhost only, for SQL clients
+  mysql-catalog:
     <<: *mysql
-    container_name: mysql-itens
+    container_name: mysql-catalog
     environment:
       <<: *mysql-env
-      MYSQL_DATABASE: itens_db
+      MYSQL_DATABASE: catalog_db
     ports: ["127.0.0.1:3307:3306"]
     volumes:
       - ./catalog/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - mysql-itens-data:/var/lib/mysql
+      - mysql-catalog-data:/var/lib/mysql
 
-  mysql-pedidos:
+  mysql-orders:
     <<: *mysql
-    container_name: mysql-pedidos
+    container_name: mysql-orders
     environment:
       <<: *mysql-env
-      MYSQL_DATABASE: pedidos_db
+      MYSQL_DATABASE: orders_db
     ports: ["127.0.0.1:3308:3306"]
     volumes:
       - ./orders/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - mysql-pedidos-data:/var/lib/mysql
+      - mysql-orders-data:/var/lib/mysql
 
-  mysql-usuarios:
+  mysql-users:
     <<: *mysql
-    container_name: mysql-usuarios
+    container_name: mysql-users
     environment:
       <<: *mysql-env
-      MYSQL_DATABASE: usuarios_db
+      MYSQL_DATABASE: users_db
     ports: ["127.0.0.1:3309:3306"]
     volumes:
       - ./users/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - mysql-usuarios-data:/var/lib/mysql
+      - mysql-users-data:/var/lib/mysql
 
 networks:
-  ecommerce:
+  lume:
 
 volumes:
-  mysql-itens-data:
-  mysql-pedidos-data:
-  mysql-usuarios-data:
+  mysql-catalog-data:
+  mysql-orders-data:
+  mysql-users-data:
