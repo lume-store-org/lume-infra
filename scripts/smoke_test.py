@@ -41,9 +41,9 @@ checar('catálogo público', status == 200 and len(catalogo['itens']) > 0)
 
 checar('pedidos exigem login', chamar('GET', '/api/pedidos')[0] == 401)
 checar('lista de usuários exige login', chamar('GET', '/api/usuarios')[0] == 401)
-checar('senha errada é recusada', chamar('POST', '/api/auth/login', {'email': 'cliente@loja.dev', 'senha': 'errada'})[0] == 401)
+checar('senha errada é recusada', chamar('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'senha': 'errada'})[0] == 401)
 
-_, login = chamar('POST', '/api/auth/login', {'email': 'cliente@loja.dev', 'senha': 'senha123'})
+_, login = chamar('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'senha': 'senha123'})
 token = login.get('token')
 checar('login do cliente', bool(token))
 
@@ -64,7 +64,7 @@ status, cancelado = chamar('DELETE', f"/api/pedidos/{pedido['id']}", token=token
 checar('cancelamento devolve o estoque', status == 200 and cancelado['status'] == 'cancelado'
        and chamar('GET', f"/api/itens/{item['id']}")[1]['estoque'] == item['estoque'])
 
-_, admin = chamar('POST', '/api/auth/login', {'email': 'admin@loja.dev', 'senha': 'admin123'})
+_, admin = chamar('POST', '/api/auth/login', {'email': 'admin@lumestore.dev', 'senha': 'admin123'})
 checar('admin lista usuários', chamar('GET', '/api/usuarios', token=admin.get('token'))[0] == 200)
 
 print('\nTudo certo.' if not falhas else f'\n{falhas} verificação(ões) falharam.')
