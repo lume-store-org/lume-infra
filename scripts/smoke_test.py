@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Teste de ponta a ponta pelo API Gateway (só biblioteca padrão).
+"""End-to-end test through the API Gateway (standard library only).
 
-Uso: docker compose up -d --build && python3 scripts/smoke_test.py
+Usage: docker compose up -d --build && python3 scripts/smoke_test.py
 """
 import json
 import os
@@ -10,16 +10,16 @@ import urllib.error
 import urllib.request
 
 API = os.environ.get('API_URL', 'http://localhost:5000')
-falhas = 0
+failures = 0
 
 
-def chamar(metodo, caminho, corpo=None, token=None, headers=None):
-    req = urllib.request.Request(f'{API}{caminho}', method=metodo, data=json.dumps(corpo).encode() if corpo is not None else None)
+def call(method, path, body=None, token=None, headers=None):
+    req = urllib.request.Request(f'{API}{path}', method=method, data=json.dumps(body).encode() if body is not None else None)
     req.add_header('Content-Type', 'application/json')
     if token:
         req.add_header('Authorization', f'Bearer {token}')
-    for k, v in (headers or {}).items():
-        req.add_header(k, v)
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, json.loads(resp.read() or b'{}')
@@ -27,45 +27,45 @@ def chamar(metodo, caminho, corpo=None, token=None, headers=None):
         return e.code, json.loads(e.read() or b'{}')
 
 
-def checar(descricao, condicao):
-    global falhas
-    print(f"{'ok ' if condicao else 'FALHOU'}  {descricao}")
-    falhas += not condicao
+def check(description, condition):
+    global failures
+    print(f"{'ok ' if condition else 'FAIL'}  {description}")
+    failures += not condition
 
 
-status, saude = chamar('GET', '/health')
-checar('gateway e os três serviços online', status == 200 and set(saude['services'].values()) == {'online'})
+status, health = call('GET', '/health')
+check('gateway and the three services are online', status == 200 and set(health['services'].values()) == {'online'})
 
-status, catalogo = chamar('GET', '/api/itens')
-checar('catálogo público', status == 200 and len(catalogo['itens']) > 0)
+status, catalog = call('GET', '/api/products')
+check('public catalog', status == 200 and len(catalog['products']) > 0)
 
-checar('pedidos exigem login', chamar('GET', '/api/pedidos')[0] == 401)
-checar('lista de usuários exige login', chamar('GET', '/api/usuarios')[0] == 401)
-checar('senha errada é recusada', chamar('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'senha': 'errada'})[0] == 401)
+check('orders require login', call('GET', '/api/orders')[0] == 401)
+check('user list requires login', call('GET', '/api/users')[0] == 401)
+check('wrong password is rejected', call('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'password': 'wrong'})[0] == 401)
 
-_, login = chamar('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'senha': 'senha123'})
+_, login = call('POST', '/api/auth/login', {'email': 'cliente@lumestore.dev', 'password': 'senha123'})
 token = login.get('token')
-checar('login do cliente', bool(token))
+check('customer login', bool(token))
 
-checar('cliente não lista usuários', chamar('GET', '/api/usuarios', token=token)[0] == 403)
-checar('header de admin forjado é ignorado',
-       chamar('GET', '/api/usuarios', token=token, headers={'X-Usuario-Admin': '1', 'X-Usuario-Id': '1'})[0] == 403)
-checar('cliente não cadastra produto', chamar('POST', '/api/itens', {'nome': 'x', 'preco': 1}, token=token)[0] == 403)
+check('customer cannot list users', call('GET', '/api/users', token=token)[0] == 403)
+check('forged admin header is ignored',
+      call('GET', '/api/users', token=token, headers={'X-User-Admin': '1', 'X-User-Id': '1'})[0] == 403)
+check('customer cannot create products', call('POST', '/api/products', {'name': 'x', 'price': 1}, token=token)[0] == 403)
 
-item = catalogo['itens'][0]
-status, pedido = chamar('POST', '/api/pedidos', {'itens': [{'item_id': item['id'], 'quantidade': 1, 'preco_unitario': 0.01}]}, token=token)
-checar('pedido criado com o preço do catálogo (não o do cliente)', status == 201 and pedido['valor_total'] == item['preco'])
-checar('estoque reservado', chamar('GET', f"/api/itens/{item['id']}")[1]['estoque'] == item['estoque'] - 1)
+product = catalog['products'][0]
+status, order = call('POST', '/api/orders', {'items': [{'product_id': product['id'], 'quantity': 1, 'unit_price': 0.01}]}, token=token)
+check('order uses the catalog price (not the client one)', status == 201 and order['total'] == product['price'])
+check('stock reserved', call('GET', f"/api/products/{product['id']}")[1]['stock'] == product['stock'] - 1)
 
-status, _ = chamar('POST', '/api/pedidos', {'itens': [{'item_id': item['id'], 'quantidade': 10**6}]}, token=token)
-checar('estoque insuficiente é recusado', status == 409)
+status, _ = call('POST', '/api/orders', {'items': [{'product_id': product['id'], 'quantity': 10**6}]}, token=token)
+check('not enough stock is rejected', status == 409)
 
-status, cancelado = chamar('DELETE', f"/api/pedidos/{pedido['id']}", token=token)
-checar('cancelamento devolve o estoque', status == 200 and cancelado['status'] == 'cancelado'
-       and chamar('GET', f"/api/itens/{item['id']}")[1]['estoque'] == item['estoque'])
+status, cancelled = call('DELETE', f"/api/orders/{order['id']}", token=token)
+check('cancelling releases the stock', status == 200 and cancelled['status'] == 'cancelled'
+      and call('GET', f"/api/products/{product['id']}")[1]['stock'] == product['stock'])
 
-_, admin = chamar('POST', '/api/auth/login', {'email': 'admin@lumestore.dev', 'senha': 'admin123'})
-checar('admin lista usuários', chamar('GET', '/api/usuarios', token=admin.get('token'))[0] == 200)
+_, admin = call('POST', '/api/auth/login', {'email': 'admin@lumestore.dev', 'password': 'admin123'})
+check('admin lists users', call('GET', '/api/users', token=admin.get('token'))[0] == 200)
 
-print('\nTudo certo.' if not falhas else f'\n{falhas} verificação(ões) falharam.')
-sys.exit(1 if falhas else 0)
+print('\nAll good.' if not failures else f'\n{failures} check(s) failed.')
+sys.exit(1 if failures else 0)
