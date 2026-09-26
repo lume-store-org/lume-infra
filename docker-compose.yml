@@ -23,6 +23,20 @@ x-service-env: &service-env
   DB_PASSWORD: ${DB_PASSWORD}
 
 services:
+  # Loja (Next.js); fala só com o API Gateway, pelo navegador
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks: [ecommerce]
+
   # Único ponto de entrada da API
   api-gateway:
     build: ./api-gateway
