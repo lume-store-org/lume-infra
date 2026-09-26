@@ -26,7 +26,7 @@ services:
   # Loja (Next.js); fala só com o API Gateway, pelo navegador
   frontend:
     build:
-      context: ./frontend
+      context: ./front
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
     container_name: frontend
@@ -39,7 +39,7 @@ services:
 
   # Único ponto de entrada da API
   api-gateway:
-    build: ./api-gateway
+    build: ./gateway
     container_name: api-gateway
     restart: unless-stopped
     ports:
@@ -56,7 +56,7 @@ services:
     networks: [ecommerce]
 
   service-itens:
-    build: ./service-itens
+    build: ./catalog
     container_name: service-itens
     restart: unless-stopped
     environment:
@@ -68,7 +68,7 @@ services:
     networks: [ecommerce]
 
   service-pedidos:
-    build: ./service-pedidos
+    build: ./orders
     container_name: service-pedidos
     restart: unless-stopped
     environment:
@@ -82,7 +82,7 @@ services:
     networks: [ecommerce]
 
   service-usuarios:
-    build: ./service-usuarios
+    build: ./users
     container_name: service-usuarios
     restart: unless-stopped
     environment:
@@ -102,7 +102,7 @@ services:
       MYSQL_DATABASE: itens_db
     ports: ["127.0.0.1:3307:3306"]
     volumes:
-      - ./service-itens/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./catalog/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-itens-data:/var/lib/mysql
 
   mysql-pedidos:
@@ -113,7 +113,7 @@ services:
       MYSQL_DATABASE: pedidos_db
     ports: ["127.0.0.1:3308:3306"]
     volumes:
-      - ./service-pedidos/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./orders/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-pedidos-data:/var/lib/mysql
 
   mysql-usuarios:
@@ -124,7 +124,7 @@ services:
       MYSQL_DATABASE: usuarios_db
     ports: ["127.0.0.1:3309:3306"]
     volumes:
-      - ./service-usuarios/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./users/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-usuarios-data:/var/lib/mysql
 
 networks:
