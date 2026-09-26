@@ -26,7 +26,7 @@ services:
   # Store front (Next.js); the browser talks only to the API Gateway
   lume-front:
     build:
-      context: ./front
+      context: ../lume-front
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
     container_name: lume-front
@@ -39,7 +39,7 @@ services:
 
   # Single entry point of the API
   lume-gateway:
-    build: ./gateway
+    build: ../lume-gateway
     container_name: lume-gateway
     restart: unless-stopped
     ports:
@@ -56,7 +56,7 @@ services:
     networks: [lume]
 
   lume-catalog:
-    build: ./catalog
+    build: ../lume-catalog
     container_name: lume-catalog
     restart: unless-stopped
     environment:
@@ -68,7 +68,7 @@ services:
     networks: [lume]
 
   lume-orders:
-    build: ./orders
+    build: ../lume-orders
     container_name: lume-orders
     restart: unless-stopped
     environment:
@@ -82,7 +82,7 @@ services:
     networks: [lume]
 
   lume-users:
-    build: ./users
+    build: ../lume-users
     container_name: lume-users
     restart: unless-stopped
     environment:
@@ -102,7 +102,7 @@ services:
       MYSQL_DATABASE: catalog_db
     ports: ["127.0.0.1:3307:3306"]
     volumes:
-      - ./catalog/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../lume-catalog/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-catalog-data:/var/lib/mysql
 
   mysql-orders:
@@ -113,7 +113,7 @@ services:
       MYSQL_DATABASE: orders_db
     ports: ["127.0.0.1:3308:3306"]
     volumes:
-      - ./orders/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../lume-orders/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-orders-data:/var/lib/mysql
 
   mysql-users:
@@ -124,7 +124,7 @@ services:
       MYSQL_DATABASE: users_db
     ports: ["127.0.0.1:3309:3306"]
     volumes:
-      - ./users/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../lume-users/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - mysql-users-data:/var/lib/mysql
 
 networks:
