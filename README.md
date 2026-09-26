@@ -1,101 +1,132 @@
-# Projeto E-commerce com Microserviços
+<p align="center">
+  <img src="docs/logo.svg" alt="Lume Store" width="240" />
+</p>
 
-Este é um projeto de e-commerce desenvolvido com arquitetura de microserviços utilizando Python Flask, Docker e Docker Compose.
+<h1 align="center">
+  Lume Store · Infra
+</h1>
+
+<p align="center">
+  <img src="docs/demo.webp" alt="Lume Store rodando: vitrine, carrinho, checkout, meus pedidos e painel admin" />
+</p>
+
+<p align="center">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=docker,mysql,flask,python,nextjs,react,ts,tailwind" alt="Stacks" />
+  </a>
+</p>
+
+## Qual a finalidade do projeto?
+
+A **Lume Store** é uma loja online de tecnologia e estilo construída em **microserviços**: cada parte do negócio (usuários, catálogo e pedidos) é um serviço Flask independente, com o **seu próprio banco MySQL**, e tudo passa por um **API Gateway** que valida o login e roteia as chamadas. O front é uma loja completa em Next.js, com vitrine, carrinho, checkout, histórico de pedidos e painel administrativo.
+
+Este repositório tem o `docker-compose` que sobe a stack inteira (5 aplicações + 3 bancos) com um comando, além das variáveis de ambiente e do teste de ponta a ponta.
 
 ## Arquitetura
 
-O projeto é composto pelos seguintes microserviços:
+<p align="center">
+  <img src="docs/arch.gif" alt="Arquitetura da Lume Store: navegador, front, API Gateway, microserviços de usuários, pedidos e catálogo, cada um com seu MySQL" />
+</p>
 
-1. **API Gateway** (Porta 5000): Ponto de entrada para todos os serviços
-2. **Serviço de Itens** (Porta 5001): Gerencia o catálogo de produtos
-3. **Serviço de Pedidos** (Porta 5002): Gerencia os pedidos dos clientes
-4. **Serviço de Usuários** (Porta 5003): Gerencia os usuários e autenticação
+## O que foi construído
 
-## Requisitos
+### Serviços
 
-- Docker
-- Docker Compose
+| Serviço | Porta | Repositório | Função |
+|---|---|---|---|
+| `lume-front` | 3000 | [lume-front](https://github.com/lume-store-org/lume-front) | Loja em Next.js |
+| `lume-gateway` | 5000 | [lume-gateway](https://github.com/lume-store-org/lume-gateway) | Único ponto de entrada da API; valida o token e roteia |
+| `lume-users` | interna (5003) | [lume-users](https://github.com/lume-store-org/lume-users) | Contas, login e sessões |
+| `lume-catalog` | interna (5001) | [lume-catalog](https://github.com/lume-store-org/lume-catalog) | Produtos, categorias e estoque |
+| `lume-orders` | interna (5002) | [lume-orders](https://github.com/lume-store-org/lume-orders) | Pedidos; reserva estoque no catálogo |
+| `mysql-users`, `mysql-catalog`, `mysql-orders` | 3309, 3307, 3308 (só `127.0.0.1`) | · | Um banco por serviço |
 
-## Como executar
+Só o front e o gateway ficam expostos. Os microserviços conversam apenas pela rede interna do Docker, e todos os containers têm healthcheck.
 
-Para iniciar todos os serviços:
+### Segurança
 
-```bash
-cd NODO-PROJETO-DO-ZERO
-docker-compose up --build
+| Ponto | Como foi resolvido |
+|---|---|
+| Credenciais | Senhas do MySQL só no `.env` (fora do git); a compose não sobe sem elas |
+| Senhas dos usuários | Hash **scrypt com salt** (werkzeug) |
+| Autenticação | Token de sessão validado no gateway em toda rota privada |
+| Autorização | Headers internos `X-User-*` definidos pelo gateway; os enviados pelo cliente são descartados |
+| Preço | Sempre do catálogo, nunca do navegador |
+| Logs | O gateway não registra corpo de requisição nem token |
+| Containers | Rodam sem root; bancos acessíveis só em `localhost` |
+
+## Tecnologias utilizadas
+
+- **Docker Compose:** orquestração local das 8 peças;
+- **Python 3.12 + Flask 3 + Gunicorn:** gateway e microserviços;
+- **MySQL 8:** um banco por microserviço;
+- **Next.js 14 + React + TypeScript + Tailwind:** loja.
+
+## Estrutura do repositório
+
+```text
+lume-infra/
+├── docker-compose.yml     # Stack completa (builda os repositórios vizinhos)
+├── .env.example           # Senhas e URLs (copie para .env)
+├── scripts/smoke_test.py  # Teste de ponta a ponta pelo gateway
+├── docs/                  # Logo, demo e diagrama
+└── README.md
 ```
 
-Para executar em segundo plano:
+## Fluxo de funcionamento
+
+1. O cliente navega na loja (`lume-front`), que chama a API em `:5000`.
+2. O `lume-gateway` valida o token no `lume-users` e repassa a chamada ao serviço certo, com o usuário nos headers internos.
+3. Ao fechar o pedido, o `lume-orders` pede ao `lume-catalog` para **reservar o estoque**; o catálogo baixa as quantidades numa transação e devolve os preços oficiais.
+4. O pedido é gravado no banco de pedidos. Se algo falhar, o estoque é devolvido.
+5. Cancelar um pedido pendente ou pago também devolve o estoque.
+
+## Como rodar
+
+Os seis repositórios precisam estar lado a lado:
 
 ```bash
-docker-compose up -d --build
+for r in front gateway users catalog orders infra; do git clone https://github.com/lume-store-org/lume-$r; done
+cd lume-infra
+cp .env.example .env        # troque as senhas
+docker compose up -d --build
 ```
 
-## Endpoints disponíveis
+| Endereço | O quê |
+|---|---|
+| http://localhost:3000 | Loja |
+| http://localhost:5000/docs | Swagger da API |
 
-### API Gateway
+Contas de teste: `cliente@lumestore.dev` / `senha123` e `admin@lumestore.dev` / `admin123`.
 
-- `GET /`: Verificar status do API Gateway
-- `GET /health`: Verificar status de saúde de todos os serviços
+Para apagar tudo, inclusive os dados: `docker compose down -v`.
 
-### Serviço de Itens
+## Como validar a entrega
 
-- `GET /api/itens`: Listar todos os itens
-- `GET /api/itens/<id>`: Obter item específico
-- `POST /api/itens`: Criar novo item
-- `PUT /api/itens/<id>`: Atualizar item
-- `DELETE /api/itens/<id>`: Remover item
-
-### Serviço de Pedidos
-
-- `GET /api/pedidos`: Listar todos os pedidos
-- `GET /api/pedidos/<id>`: Obter pedido específico
-- `GET /api/pedidos/usuario/<usuario_id>`: Listar pedidos de um usuário
-- `POST /api/pedidos`: Criar novo pedido
-- `PATCH /api/pedidos/<id>/status`: Atualizar status de um pedido
-- `DELETE /api/pedidos/<id>`: Cancelar pedido
-
-### Serviço de Usuários
-
-- `GET /api/usuarios`: Listar todos os usuários
-- `GET /api/usuarios/<id>`: Obter usuário específico
-- `POST /api/usuarios`: Cadastrar novo usuário
-- `PUT /api/usuarios/<id>`: Atualizar usuário
-- `DELETE /api/usuarios/<id>`: Remover usuário
-- `POST /api/auth/login`: Realizar login
-- `POST /api/auth/verificar`: Verificar token de autenticação
-- `POST /api/auth/logout`: Realizar logout
-
-## Testes
-
-### Serviço de Itens
-
-Listar todos os itens:
 ```bash
-curl http://localhost:5000/api/itens/
+python3 scripts/smoke_test.py
 ```
 
-### Serviço de Usuários
+O teste passa pelo gateway e confere 14 pontos:
 
-Fazer login com usuário padrão:
-```bash
-curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"email": "usuario@teste.com", "senha": "senha123"}'
-```
+- os três serviços online;
+- rotas privadas exigindo login;
+- cliente sem acesso a rotas de admin;
+- header de admin forjado sendo ignorado;
+- preço vindo do catálogo;
+- estoque reservado, recusado quando falta e devolvido no cancelamento.
 
-### Serviço de Pedidos
+## Projeto Lume Store
 
-Criar um novo pedido (necessita token de autenticação):
-```bash
-curl -X POST http://localhost:5000/api/pedidos -H "Content-Type: application/json" -d '{"usuario_id": 1, "itens": [{"item_id": 1, "quantidade": 1, "preco_unitario": 4999.90}]}'
-```
+| Repositório | Camada |
+|---|---|
+| [lume-front](https://github.com/lume-store-org/lume-front) | Loja (Next.js) |
+| [lume-gateway](https://github.com/lume-store-org/lume-gateway) | API Gateway (Flask) |
+| [lume-users](https://github.com/lume-store-org/lume-users) | Microserviço de usuários |
+| [lume-catalog](https://github.com/lume-store-org/lume-catalog) | Microserviço de catálogo |
+| [lume-orders](https://github.com/lume-store-org/lume-orders) | Microserviço de pedidos |
+| [lume-infra](https://github.com/lume-store-org/lume-infra) | Docker Compose com a stack completa |
 
-## Estrutura de dados
+## Autor
 
-Todas as informações são armazenadas em arquivos JSON para simplificar o projeto. Em um ambiente de produção, você deve considerar usar bancos de dados adequados para cada microserviço.
-
-## Volumes
-
-Os dados são armazenados em volumes Docker para persistência:
-- `./data/itens`: Dados do serviço de itens
-- `./data/pedidos`: Dados do serviço de pedidos
-- `./data/usuarios`: Dados do serviço de usuários
+**William Alves Coelho** · [@willtechdev](https://github.com/willtechdev)
